@@ -1,0 +1,22 @@
+services:
+  pionex-bot:
+    build: .
+    container_name: pionex-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    networks:
+      - default
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pionex-bot.rule=Host(`pionex-bot.macmini.larran.com`)"
+      - "traefik.http.routers.pionex-bot.entrypoints=websecure"
+      - "traefik.http.services.pionex-bot.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik_default"
+
+networks:
+  default:
+  traefik_default:
+    external: true
