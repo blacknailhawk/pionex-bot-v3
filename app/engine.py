@@ -242,9 +242,15 @@ class Engine:
     async def _close(self, symbol, pos, price, reason):
         side = pos.get("side", "LONG")
         size = pos["size"]
+        entry = pos["entry"]
         fee = size * price * cfg.FEE_RATE
+        # Entry fee was already paid at open (baked into a smaller position size via
+        # size = (notional - fee_entry) / entry), so it never appears as a subtracted
+        # amount anywhere. Recover it here so the recorded P&L reflects the true
+        # round-trip cost, not just the exit fee.
+        fee_entry = size * entry * cfg.FEE_RATE / (1 - cfg.FEE_RATE)
         if side == "LONG":
-            pnl = (price - pos["entry"]) * size - fee
+            cash_pnl = (price - entry) * size - fee
             if self.mode == "paper":
                 store.kv_set("paper_cash",
                              store.kv_get("paper_cash") + size * price - fee)
@@ -252,9 +258,10 @@ class Engine:
                 res = await self.client.market_sell(symbol, size)
                 log.info("LIVE SELL %s: %s", symbol, res)
         else:  # SHORT (paper only): return collateral + pnl
-            pnl = (pos["entry"] - price) * size - fee
+            cash_pnl = (entry - price) * size - fee
             store.kv_set("paper_cash",
-                         store.kv_get("paper_cash") + size * pos["entry"] + pnl)
+                         store.kv_get("paper_cash") + size * entry + cash_pnl)
+        pnl = cash_pnl - fee_entry
         store.close_position(symbol)
         store.record_trade(symbol, "SELL" if side == "LONG" else "COVER",
                            price, size, fee, pnl, reason, self.mode)
@@ -438,8 +445,7 @@ class Engine:
                 decision_patch = _json.loads(raw_json)
                 decisions = decision_patch.get("decisions", {})
 
-                if decisions:
-                    log.info("AI TRADER ▸ Decisions: %s", _json.dumps(decisions))
+                log.info("AI TRADER ▸ Decisions: %s", _json.dumps(decisions) if decisions else "{} (all HOLD)")
 
                 for symbol, dec in decisions.items():
                     if symbol not in symbol_states:
@@ -494,7 +500,10 @@ class Engine:
                             log.info("AI ENTRY %s %s | %s", side, symbol, rationale)
                             await self._open(symbol, side, notional, price, stop, tp, f"ai_entry: {rationale}")
 
-                ai_trade_success = True
+                # Only suppress the score-based fallback when the AI actually
+                # made a decision this tick. An empty dict means it held on
+                # everything, so let the classic entry logic still get a turn.
+                ai_trade_success = bool(decisions)
             except Exception as ai_err:
                 log.warning("AI Trader decision execution failed: %s", ai_err)
 

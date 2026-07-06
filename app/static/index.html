@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#E8E2D8">
-<title>NEXUSBOT V3</title>
+<title>NEXUSBOT V4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="/static/lightweight-charts.standalone.production.js"></script>
@@ -106,7 +106,13 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
 .scard .sl { font-size:10px; color:var(--mut); letter-spacing:.09em; text-transform:uppercase; margin-bottom:6px; }
 .scard .sv { font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1; }
 .scard .sd { font-size:11px; margin-top:4px; color:var(--mut); }
+.mkt-rows { margin-top:6px; display:flex; flex-direction:column; gap:7px; }
+.mkt-row  { display:flex; justify-content:space-between; align-items:baseline; }
+.mkt-lbl  { font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.06em; }
+.mkt-val  { font-size:15px; font-weight:800; }
 .pos-c { color:var(--up); } .neg-c { color:var(--dn); }
+.pnl-spark { height:34px; margin-top:6px; }
+.pnl-spark svg { display:block; width:100%; height:100%; }
 
 /* ── DATE ROW ── */
 .date-row { display:flex; align-items:baseline; gap:10px; }
@@ -281,7 +287,7 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
 
 <!-- LOGIN -->
 <div id="login">
-  <h1>NEXUSBOT <em style="color:var(--mut)">V3</em></h1>
+  <h1>NEXUSBOT <em style="color:var(--mut)">V4</em></h1>
   <p>Pionex trading bot — enter your dashboard token.</p>
   <input id="tok" type="password" placeholder="Dashboard token" autocomplete="current-password">
   <button onclick="saveTok()">Open console</button>
@@ -291,7 +297,7 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
 <div id="shell" style="display:none">
 
   <header>
-    <div class="logo">NEXUSBOT <em>V3</em></div>
+    <div class="logo">NEXUSBOT <em>V4</em></div>
     <!-- Desktop tabs -->
     <div class="dtabs">
       <button class="on" data-tab="overview">Overview</button>
@@ -339,6 +345,7 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
             <div class="sl">Day P&amp;L</div>
             <div class="sv num" id="s-pnl">—</div>
             <div class="sd" id="s-pnlp">—</div>
+            <div class="pnl-spark" id="pnl-spark"></div>
           </div>
           <div class="scard">
             <div class="sl">Positions</div>
@@ -346,9 +353,11 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
             <div class="sd" id="s-posd">—</div>
           </div>
           <div class="scard">
-            <div class="sl">Fear &amp; Greed</div>
-            <div class="sv" id="s-fg">—</div>
-            <div class="sd" id="s-fgl">—</div>
+            <div class="sl">Opening Markets</div>
+            <div class="mkt-rows">
+              <div class="mkt-row"><span class="mkt-lbl">Crypto</span><span class="mkt-val" id="s-mkt-crypto">—</span></div>
+              <div class="mkt-row"><span class="mkt-lbl">Stocks</span><span class="mkt-val" id="s-mkt-stock">—</span></div>
+            </div>
           </div>
         </div>
 
@@ -700,9 +709,18 @@ async function refresh() {
   $('#s-pnlp').className   = 'sd '+(pp?'pos-c':'neg-c');
   $('#s-pos').textContent  = state.positions.length;
   $('#s-posd').textContent = state.positions.length ? state.positions.map(p=>p.symbol.split('_')[0]).join(' · ') : 'none';
-  $('#s-fg').textContent   = fgN;
-  $('#s-fg').className     = 'sv '+(fgN<30?'neg-c':fgN>70?'pos-c':'');
-  $('#s-fgl').textContent  = fgN<20?'Extreme Fear':fgN<45?'Fear':fgN>80?'Extreme Greed':fgN>55?'Greed':'Neutral';
+  const mktTxt = m => {
+    if (m?.open) return 'OPEN';
+    if (m?.next_open_in_hours == null) return '—';
+    let h = Math.floor(m.next_open_in_hours), mins = Math.round((m.next_open_in_hours - h) * 60);
+    if (mins === 60) { h += 1; mins = 0; }
+    return 'in '+h+'h '+mins+'m';
+  };
+  const mc=state.market_crypto, ms=state.market_stock;
+  $('#s-mkt-crypto').textContent = mktTxt(mc);
+  $('#s-mkt-crypto').className   = 'mkt-val '+(mc?.open?'pos-c':'');
+  $('#s-mkt-stock').textContent  = mktTxt(ms);
+  $('#s-mkt-stock').className    = 'mkt-val '+(ms?.open?'pos-c':'');
 
   // symbol cards
   const scores=state.scores||{}, sigs=state.signals||{};
@@ -904,6 +922,17 @@ async function loadEquity(){
   eqChart.timeScale().fitContent();
 }
 
+// ── All-time P&L sparkline (Overview stat card) ──
+async function loadPnlSpark(){
+  const el=$('#pnl-spark'); if(!el) return;
+  try{
+    const eq=await api('/api/equity');
+    if(!eq.length){ el.innerHTML=''; return; }
+    const base=eq[0].value;
+    el.innerHTML=spark(eq.map(e=>e.value-base),260,34);
+  }catch(e){}
+}
+
 // ── Strategies / Backtest ──
 let btSymbolsLoaded = false, btChart, btSeries, _btResults = [];
 
@@ -981,7 +1010,8 @@ async function loadTrades(){
   if(!ts.length){T.innerHTML='<div class="empty">No trades yet</div>';return;}
   T.innerHTML=ts.map(t=>{
     const d=new Date(t.ts*1000).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-    const pnl=t.pnl==null?'':'<div class="'+(t.pnl>=0?'pos-c':'neg-c')+'">'+(t.pnl>=0?'+':'')+fmt(t.pnl)+'</div>';
+    const pnl=t.pnl==null?'<div class="small" style="color:var(--mut)">open</div>'
+      :'<div class="'+(t.pnl>=0?'pos-c':'neg-c')+'">'+(t.pnl>=0?'+':'')+fmt(t.pnl)+'</div>';
     return '<div class="row"><div><div class="rsym">'+t.side+' '+t.symbol.replace('_','/')+'</div>'
       +'<div class="rsub">'+d+' · '+t.reason+' · '+t.mode+'</div></div>'
       +'<div class="rpnl"><div class="big">'+fmt(t.price)+'</div>'+pnl+'</div></div>';
@@ -1019,11 +1049,12 @@ async function sendArch(mobile) {
 
 // ── Boot ──
 function boot(){
-  refresh(); loadWeights(); loadTrades(); refreshLogs();
+  refresh(); loadWeights(); loadTrades(); refreshLogs(); loadPnlSpark();
   setInterval(refresh,    10000);
   setInterval(loadTrades, 30000);
   setInterval(refreshLogs, 5000);
   setInterval(loadWeights,60000);
+  setInterval(loadPnlSpark,60000);
 }
 
 if (TOK) boot();

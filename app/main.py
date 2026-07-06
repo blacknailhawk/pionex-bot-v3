@@ -72,6 +72,8 @@ async def status():
                           "upnl": (px - p["entry"]) * p["size"] * sgn,
                           "upnl_pct": (px / p["entry"] - 1) * 100 * sgn})
     mh = market_hours.session_status()
+    mh_crypto = market_hours.session_status("BTC_USDT")
+    mh_stock = market_hours.session_status("AAPLX_USDT")
     return {
         "mode": engine.mode, "paused": engine.paused,
         "halted": bool(engine.halted_until and time.time() < engine.halted_until),
@@ -81,6 +83,8 @@ async def status():
         "market_open": mh["open"],
         "market_reason": mh["reason"],
         "market_next_open": mh["next_open_et"],
+        "market_crypto": mh_crypto,
+        "market_stock": mh_stock,
         "equity": eq, "day_pnl": day_pnl,
         "day_pnl_pct": day_pnl / anchor["equity"] * 100 if anchor["equity"] else 0,
         "positions": positions, "signals": engine.last_signals,

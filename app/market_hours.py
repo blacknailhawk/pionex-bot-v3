@@ -98,12 +98,23 @@ def is_market_open(symbol: str | None = None,
         return in_session
 
 
-def next_open(now: dt.datetime | None = None) -> dt.datetime:
-    """Return the next NYSE regular-session open (9:30 ET on a business day)."""
+def next_open(now: dt.datetime | None = None, symbol: str | None = None) -> dt.datetime:
+    """Return the next session open.
+
+    Crypto reopens at 00:00 ET on the next non-weekend, non-holiday day
+    (it trades any hour on a valid day). xStocks/ETFs/commodities reopen
+    at the next NYSE regular-session open (9:30 ET on a business day).
+    """
     if now is None:
         now_et = dt.datetime.now(ET)
     else:
         now_et = now.astimezone(ET)
+
+    if symbol and _is_crypto(symbol):
+        candidate_date = now_et.date() + dt.timedelta(days=1)
+        while candidate_date.weekday() >= 5 or _is_nyse_holiday(candidate_date):
+            candidate_date += dt.timedelta(days=1)
+        return dt.datetime.combine(candidate_date, dt.time(0, 0), tzinfo=ET)
 
     candidate = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
     if now_et >= candidate:
@@ -124,7 +135,7 @@ def session_status(symbol: str | None = None,
         now_et = now.astimezone(ET)
 
     open_ = is_market_open(symbol, now)
-    nxt   = next_open(now) if not open_ else None
+    nxt   = next_open(now, symbol) if not open_ else None
     return {
         "open": open_,
         "reason": (
@@ -134,4 +145,5 @@ def session_status(symbol: str | None = None,
             "open"
         ),
         "next_open_et": nxt.strftime("%Y-%m-%d %H:%M ET") if nxt else None,
+        "next_open_in_hours": round((nxt - now_et).total_seconds() / 3600, 4) if nxt else None,
     }
