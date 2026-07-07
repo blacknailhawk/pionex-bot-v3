@@ -48,6 +48,9 @@ class Engine:
             store.kv_set("paper_cash", PAPER_START_EQUITY)
         if store.kv_get("day_anchor") is None:
             self._reset_day_anchor(PAPER_START_EQUITY)
+        if store.kv_get("inception_ts") is None:
+            store.kv_set("inception_ts", time.time())
+            store.kv_set("inception_equity", PAPER_START_EQUITY)
 
     # ---------- scoring config ----------
     @property

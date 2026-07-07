@@ -87,6 +87,8 @@ async def status():
         "market_stock": mh_stock,
         "equity": eq, "day_pnl": day_pnl,
         "day_pnl_pct": day_pnl / anchor["equity"] * 100 if anchor["equity"] else 0,
+        "inception_ts": store.kv_get("inception_ts"),
+        "inception_equity": store.kv_get("inception_equity"),
         "positions": positions, "signals": engine.last_signals,
         "scores": engine.last_scores,
         "market_signals": engine.market_sigs,

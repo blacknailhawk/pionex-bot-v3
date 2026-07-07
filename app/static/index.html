@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#E8E2D8">
-<title>NEXUSBOT V4</title>
+<title>NEXUSBOT V4.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="/static/lightweight-charts.standalone.production.js"></script>
@@ -287,7 +287,7 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
 
 <!-- LOGIN -->
 <div id="login">
-  <h1>NEXUSBOT <em style="color:var(--mut)">V4</em></h1>
+  <h1>NEXUSBOT <em style="color:var(--mut)">V4.1</em></h1>
   <p>Pionex trading bot — enter your dashboard token.</p>
   <input id="tok" type="password" placeholder="Dashboard token" autocomplete="current-password">
   <button onclick="saveTok()">Open console</button>
@@ -297,7 +297,7 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
 <div id="shell" style="display:none">
 
   <header>
-    <div class="logo">NEXUSBOT <em>V4</em></div>
+    <div class="logo">NEXUSBOT <em>V4.1</em></div>
     <!-- Desktop tabs -->
     <div class="dtabs">
       <button class="on" data-tab="overview">Overview</button>
@@ -340,6 +340,11 @@ main  { flex:1; overflow-y:auto; padding:20px 20px 20px 24px; display:flex; flex
             <div class="sl">Portfolio</div>
             <div class="sv num" id="s-eq">—</div>
             <div class="sd" id="s-eqd">—</div>
+            <div class="mkt-rows">
+              <div class="mkt-row"><span class="mkt-lbl">Total Gain</span><span class="mkt-val" id="s-gain">—</span></div>
+              <div class="mkt-row"><span class="mkt-lbl">APY</span><span class="mkt-val" id="s-apy">—</span></div>
+              <div class="mkt-row"><span class="mkt-lbl">Since Reset</span><span class="mkt-val" id="s-since">—</span></div>
+            </div>
           </div>
           <div class="scard">
             <div class="sl">Day P&amp;L</div>
@@ -707,6 +712,22 @@ async function refresh() {
   $('#s-pnl').className    = 'sv num '+(pp?'pos-c':'neg-c');
   $('#s-pnlp').textContent = fmtP(state.day_pnl_pct)+'%';
   $('#s-pnlp').className   = 'sd '+(pp?'pos-c':'neg-c');
+
+  // since-reset stats
+  if (state.inception_ts && state.inception_equity) {
+    const elapsedSec = Date.now()/1000 - state.inception_ts;
+    const gainPct = (state.equity / state.inception_equity - 1) * 100;
+    const yearSec = 365 * 24 * 3600;
+    const apy = elapsedSec >= 3600
+      ? (Math.pow(state.equity / state.inception_equity, yearSec / elapsedSec) - 1) * 100
+      : null;
+    const d = Math.floor(elapsedSec / 86400), h = Math.floor((elapsedSec % 86400) / 3600);
+    $('#s-gain').textContent = fmtP(gainPct)+'%';
+    $('#s-gain').className   = 'mkt-val '+(gainPct>=0?'pos-c':'neg-c');
+    $('#s-apy').textContent  = apy==null ? '—' : fmtP(apy)+'%';
+    $('#s-apy').className    = 'mkt-val '+(apy==null ? '' : apy>=0?'pos-c':'neg-c');
+    $('#s-since').textContent = d+'d '+h+'h';
+  }
   $('#s-pos').textContent  = state.positions.length;
   $('#s-posd').textContent = state.positions.length ? state.positions.map(p=>p.symbol.split('_')[0]).join(' · ') : 'none';
   const mktTxt = m => {
